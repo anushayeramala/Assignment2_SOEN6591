@@ -35,7 +35,6 @@ public class ThrowsKitchenSinkFinder {
 	    	String source;
 	        try {
 	        	List<Path> fileList = getFilesFromDir(filename);
-	        	System.out.println(fileList.size());
 	        	for (int i = 0; i < fileList.size(); i++) {
 	        		Path path = fileList.get(i);
 	        		source = read(path);
