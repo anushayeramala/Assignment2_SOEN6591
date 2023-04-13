@@ -39,7 +39,6 @@ public class ThrowsKitchenSinkFinder {
 	        		Path path = fileList.get(i);
 	        		source = read(path);
 	        		parser.setSource(source.toCharArray());
-	        		//System.out.println("Searching in File name: "+path);
 	        		ASTNode root = parser.createAST(null);
 	        		root.accept(new Visitor(path));
 	        	}
@@ -70,8 +69,7 @@ public class ThrowsKitchenSinkFinder {
 	}
 	
 	public static String read(Path path) throws IOException {
-	    //Path path = Paths.get(filename);
-	
+	   
 	    String source = Files.lines(path).collect(Collectors.joining("\n"));
 	
 	    return source;
