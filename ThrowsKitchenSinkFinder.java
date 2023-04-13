@@ -35,6 +35,7 @@ public class ThrowsKitchenSinkFinder {
 	    	String source;
 	        try {
 	        	List<Path> fileList = getFilesFromDir(filename);
+	        	System.out.println(fileList.size());
 	        	for (int i = 0; i < fileList.size(); i++) {
 	        		Path path = fileList.get(i);
 	        		source = read(path);
@@ -52,9 +53,13 @@ public class ThrowsKitchenSinkFinder {
 	
 	public static List<Path> getFilesFromDir(String dirName) throws IOException {
 		List<Path> fileList = new ArrayList<>();
+		Path path1 = Paths.get(dirName);
 		DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(dirName));
 		for (Path path: stream) {
-			if (!Files.isDirectory(path) && getExtension(path.getFileName().toString()).equals("java")) {
+			if (Files.isDirectory(path)) {
+				fileList.addAll(getFilesFromDir(path.toString()));
+			}
+			else if (getExtension(path.getFileName().toString()).equals("java")) {
 				fileList.add(path);
 			}
 		}
@@ -69,8 +74,15 @@ public class ThrowsKitchenSinkFinder {
 	}
 	
 	public static String read(Path path) throws IOException {
+		String source = "";
+		
+		try {
 	   
-	    String source = Files.lines(path).collect(Collectors.joining("\n"));
+			source = Files.lines(path).collect(Collectors.joining("\n"));
+		}
+		catch (Exception e) {
+			System.err.println(e);
+		}
 	
 	    return source;
 	}
@@ -91,60 +103,65 @@ public class ThrowsKitchenSinkFinder {
 					throwDecSet.add(exceptionType.toString());
 				}
 				Block block = methodDeclaration.getBody();
+				
+				if (block != null) {
 
-				List<Statement> statements = block.statements();
-
-				for (int i = 0; i < statements.size(); i++) {
-					if (statements.get(i).getNodeType() == Statement.IF_STATEMENT) {
-						IfStatement ifStatement = (IfStatement) statements.get(i);
-						Statement thenStatement = ifStatement.getThenStatement();
-						Statement elseStatement = ifStatement.getElseStatement();
-						Visitor.findThrows(elseStatement, throwDecSet);
-						Visitor.findThrows(thenStatement, throwDecSet);
-					
-					}
-					else if (statements.get(i).getNodeType() == Statement.SWITCH_STATEMENT) {
-						SwitchStatement switchStatement = (SwitchStatement) statements.get(i);
-						List<Statement> list = switchStatement.statements();
-						for (int j = 0; j < list.size(); j++) {
-							Visitor.findThrows(list.get(j), throwDecSet);
+					List<Statement> statements = block.statements();
+	
+					for (int i = 0; i < statements.size(); i++) {
+						if (statements.get(i).getNodeType() == Statement.IF_STATEMENT) {
+							IfStatement ifStatement = (IfStatement) statements.get(i);
+							Statement thenStatement = ifStatement.getThenStatement();
+							Statement elseStatement = ifStatement.getElseStatement();
+							Visitor.findThrows(elseStatement, throwDecSet);
+							Visitor.findThrows(thenStatement, throwDecSet);
+						
+						}
+						else if (statements.get(i).getNodeType() == Statement.SWITCH_STATEMENT) {
+							SwitchStatement switchStatement = (SwitchStatement) statements.get(i);
+							List<Statement> list = switchStatement.statements();
+							for (int j = 0; j < list.size(); j++) {
+								Visitor.findThrows(list.get(j), throwDecSet);
+							}
 						}
 					}
-				}
-				
-				if (!throwDecSet.isEmpty()) {
-					CompilationUnit cu = ((CompilationUnit) methodDeclaration.getRoot());
-					int lineNum = cu.getLineNumber(methodDeclaration.getStartPosition());
-					System.out.println("Throw Kitchen Sink Found at: File Path: "+this.path+" Line: "+lineNum+" Method name: "+methodDeclaration.getName());
+					
+					if (!throwDecSet.isEmpty()) {
+						CompilationUnit cu = ((CompilationUnit) methodDeclaration.getRoot());
+						int lineNum = cu.getLineNumber(methodDeclaration.getStartPosition());
+						System.out.println("Throw Kitchen Sink Found at: File Path: "+this.path+" Line: "+lineNum+" Method name: "+methodDeclaration.getName());
+					}
 				}
 			}
 			
 			return true;
 		}
 		public static void findThrows(Statement statement, HashSet<String> throwDecSet) {
-			if (statement.getNodeType() == Statement.VARIABLE_DECLARATION_STATEMENT) {
-				VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) statement;
-				
-				if (throwDecSet.contains(variableDeclarationStatement.getType().toString())) {
-					throwDecSet.remove(variableDeclarationStatement.getType().toString());
-				}
-			}
-			else if (statement.getNodeType() == Statement.THROW_STATEMENT) {
-				ThrowStatement thenThrow = (ThrowStatement) statement;
-				Expression throwExpression = thenThrow.getExpression();
-				if (throwExpression.getNodeType() == Expression.CLASS_INSTANCE_CREATION) {
-					ClassInstanceCreation variableDeclarationExpression = (ClassInstanceCreation) throwExpression;
-					if (throwDecSet.contains(variableDeclarationExpression.getType().toString())) {
-						throwDecSet.remove(variableDeclarationExpression.getType().toString());
+			if (statement != null) {
+				if (statement.getNodeType() == Statement.VARIABLE_DECLARATION_STATEMENT) {
+					VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement) statement;
+					
+					if (throwDecSet.contains(variableDeclarationStatement.getType().toString())) {
+						throwDecSet.remove(variableDeclarationStatement.getType().toString());
 					}
 				}
-				
-			}
-			else if (statement.getNodeType() == Statement.BLOCK) {
-				Block block = (Block) statement;
-				List<Statement> statements = block.statements();
-				for (int i = 0; i < statements.size(); i++) {
-					Visitor.findThrows(statements.get(i), throwDecSet);
+				else if (statement.getNodeType() == Statement.THROW_STATEMENT) {
+					ThrowStatement thenThrow = (ThrowStatement) statement;
+					Expression throwExpression = thenThrow.getExpression();
+					if (throwExpression.getNodeType() == Expression.CLASS_INSTANCE_CREATION) {
+						ClassInstanceCreation variableDeclarationExpression = (ClassInstanceCreation) throwExpression;
+						if (throwDecSet.contains(variableDeclarationExpression.getType().toString())) {
+							throwDecSet.remove(variableDeclarationExpression.getType().toString());
+						}
+					}
+					
+				}
+				else if (statement.getNodeType() == Statement.BLOCK) {
+					Block block = (Block) statement;
+					List<Statement> statements = block.statements();
+					for (int i = 0; i < statements.size(); i++) {
+						Visitor.findThrows(statements.get(i), throwDecSet);
+					}
 				}
 			}
 		}
